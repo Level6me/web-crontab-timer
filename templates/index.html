@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>web-crontab-timer 定时任务管理</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+        :root {
+            --bg: #f2f2f7;
+            --card: #ffffff;
+            --text: #000000;
+            --text-sec: #8e8e93;
+            --accent: #007aff;
+            --danger: #ff3b30;
+            --success: #34c759;
+            --shadow: rgba(0, 0, 0, 0.04);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #000000;
+                --card: #1c1c1e;
+                --text: #ffffff;
+                --text-sec: #98989d;
+                --shadow: rgba(0, 0, 0, 0.2);
+            }
+        }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            padding: 30px 16px;
+            width: 100%;
+            max-width: 650px;
+            box-sizing: border-box;
+        }
+        .header {
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .title {
+            font-size: 28px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+        .subtitle {
+            font-size: 13px;
+            color: var(--text-sec);
+            font-weight: 600;
+            margin: 24px 0 10px 8px;
+            text-transform: uppercase;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 20px;
+            padding: 4px 20px;
+            box-shadow: 0 8px 24px var(--shadow);
+            border: 1px solid rgba(128,128,128,0.05);
+        }
+        .cron-item {
+            padding: 16px 0;
+            border-bottom: 0.5px solid rgba(128,128,128,0.15);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .cron-item:last-child {
+            border-bottom: none;
+        }
+        .cron-icon {
+            font-size: 22px;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: rgba(128,128,128,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .cron-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .cron-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .cron-name {
+            font-weight: 700;
+            font-size: 15px;
+        }
+        .cron-time {
+            font-size: 12px;
+            color: var(--text-sec);
+            font-weight: 500;
+        }
+        .cron-cmd {
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 9.5px;
+            color: var(--text-sec);
+            background: rgba(128,128,128,0.08);
+            padding: 3px 6px;
+            border-radius: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: min(300px, 50vw);
+        }
+        .cron-type-badge {
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 6px;
+            background: rgba(0,122,255,0.1);
+            color: var(--accent);
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .cron-type-badge.timer {
+            background: rgba(52,199,89,0.1);
+            color: var(--success);
+        }
+        .btn-add {
+            border: none;
+            background: var(--accent);
+            color: white;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 8px 16px;
+            border-radius: 40px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,122,255,0.25);
+            transition: transform 0.2s;
+        }
+        .btn-add:active {
+            transform: scale(0.95);
+        }
+        .btn-action {
+            border: none;
+            background: none;
+            font-size: 17px;
+            cursor: pointer;
+            padding: 6px;
+            border-radius: 8px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-action:active {
+            background: rgba(128,128,128,0.1);
+        }
+        
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 30px;
+            flex-shrink: 0;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(120,120,128,0.20);
+            border-radius: 34px;
+            transition: .3s;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 2px;
+            bottom: 2px;
+            background-color: white;
+            border-radius: 50%;
+            transition: .3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        input:checked + .slider {
+            background-color: var(--success);
+        }
+        input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+
+        /* Modal OVERLAY */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.25s ease-out;
+        }
+        .modal-overlay.active {
+            opacity: 1;
+        }
+        .modal-card {
+            background: var(--card);
+            width: 90%;
+            max-width: 440px;
+            border-radius: 28px;
+            padding: 24px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.9);
+            transition: transform 0.25s cubic-bezier(0.1, 0.8, 0.25, 1);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+            border: 1px solid rgba(128,128,128,0.1);
+        }
+        .modal-overlay.active .modal-card {
+            transform: scale(1);
+        }
+        .modal-input-card {
+            background: rgba(128,128,128,0.06);
+            padding: 12px 16px;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            border: 1px solid rgba(128,128,128,0.06);
+        }
+        .modal-input-card label {
+            font-size: 11px;
+            color: var(--text-sec);
+            font-weight: 600;
+            text-align: left;
+        }
+        .modal-input-card input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            padding: 4px 0;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 500;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        /* Segmented control */
+        .freq-segmented {
+            display: flex;
+            background: rgba(128,128,128,0.1);
+            padding: 3px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            gap: 2px;
+        }
+        .freq-segment {
+            flex: 1;
+            border: none;
+            background: none;
+            color: var(--text-sec);
+            padding: 8px 4px;
+            border-radius: 9px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: 0.2s;
+            text-align: center;
+        }
+        .freq-segment.active {
+            background: var(--card);
+            color: var(--text);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        /* Time pickers */
+        .time-select-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: center;
+            background: rgba(128,128,128,0.05);
+            padding: 12px;
+            border-radius: 14px;
+            margin-top: 8px;
+        }
+        .time-select {
+            border: none;
+            background: var(--card);
+            padding: 8px 12px;
+            border-radius: 10px;
+            color: var(--accent);
+            font-weight: 700;
+            font-size: 16px;
+            outline: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.04);
+            cursor: pointer;
+        }
+        .weekday-grid {
+            display: flex;
+            justify-content: space-between;
+            gap: 4px;
+            margin: 10px 0;
+        }
+        .weekday-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(128,128,128,0.08);
+            color: var(--text);
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+        .weekday-btn.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 3px 8px rgba(0, 122, 255, 0.3);
+        }
+        .monthday-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            margin: 10px 0;
+        }
+        .monthday-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(128,128,128,0.08);
+            color: var(--text);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+        }
+        .monthday-btn.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 3px 8px rgba(0, 122, 255, 0.3);
+        }
+
+        .btn-modal {
+            padding: 14px;
+            border-radius: 14px;
+            border: none;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <div class="title">定时任务</div>
+        <button class="btn-add" onclick="showAddCronModal()">➕ 新增</button>
+    </div>
+
+    <div class="subtitle">🕐 Crontab 定时任务</div>
+    <div class="card" id="cron-list">
+        <div style="padding:20px;text-align:center;color:#8e8e93">正在加载任务列表...</div>
+    </div>
+
+    <div class="subtitle">⏰ Systemd Timer</div>
+    <div class="card" id="timer-list">
+        <div style="padding:20px;text-align:center;color:#8e8e93">正在加载定时器...</div>
+    </div>
+</div>
+
+<!-- 弹窗组件 -->
+<div class="modal-overlay" id="modal">
+    <div class="modal-card">
+        <h3 id="modal-title" style="margin:0; text-align:left; font-size:18px;">弹窗标题</h3>
+        <div id="modal-form-content" style="flex-grow:1; overflow-y:auto; margin-top:15px;"></div>
+        <button class="btn-modal" id="btn-close-main" style="background:var(--accent); color:white" onclick="closeModal()">关闭</button>
+        <div id="confirm-row" style="display:none; margin-top:10px; gap: 10px;">
+            <button class="btn-modal" style="background:rgba(128,128,128,0.1); color:var(--text); flex:1; margin-top:15px;" onclick="closeModal()">取消</button>
+            <button class="btn-modal" id="btn-confirm" style="background:var(--accent); color:white; flex:1; margin-top:15px;"></button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 定时任务加载
+    def = loadCron;
+    function loadCron() {
+        $.getJSON('/api/cron/list', d => {
+            // Cron jobs
+            let cH = '';
+            if (d.cron.length === 0) {
+                cH = '<div style="padding:20px;text-align:center;color:#8e8e93">无 Crontab 任务</div>';
+            } else {
+                d.cron.forEach(j => {
+                    let icon = j.name.includes('gold') ? '🥇' : j.name.includes('oil') ? '⛽' : j.name.includes('daily') || j.name.includes('monitor') ? '📊' : j.name.includes('xiaomi') ? '📈' : j.name.includes('memory') ? '🧠' : j.name.includes('self-improvement') || j.name.includes('extract') ? '🎯' : '📋';
+                    cH += `<div class="cron-item">
+                        <div class="cron-icon">${icon}</div>
+                        <div class="cron-info">
+                            <div class="cron-meta">
+                                <span class="cron-name">${j.name || '未命名任务'}</span>
+                                <span class="cron-type-badge">cron</span>
+                            </div>
+                            <div class="cron-time">${j.time_desc}</div>
+                            <div style="display:flex;"><span class="cron-cmd" title="${j.command}">${j.command}</span></div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+                            <button onclick="runCronOnce('${j.command.replace(/'/g, "\\'")}')" title="立即执行一次" class="btn-action" style="color:var(--success)">▶</button>
+                            <button onclick="deleteCron('${j.id}')" title="删除任务" class="btn-action" style="color:var(--danger)">🗑️</button>
+                            <label class="toggle-switch" style="transform: scale(0.85);">
+                                <input type="checkbox" ${j.enabled?'checked':''} onchange="toggleCron('${j.id}', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>`;
+                });
+            }
+            $('#cron-list').html(cH);
+
+            // Timer jobs
+            let tH = '';
+            if (d.timers.length === 0) {
+                tH = '<div style="padding:20px;text-align:center;color:#8e8e93">无 Systemd Timer</div>';
+            } else {
+                d.timers.forEach(j => {
+                    let icon = j.name.includes('camera') ? '📷' : j.name.includes('backup') ? '💾' : '⏰';
+                    tH += `<div class="cron-item">
+                        <div class="cron-icon">${icon}</div>
+                        <div class="cron-info">
+                            <div class="cron-meta">
+                                <span class="cron-name">${j.name}</span>
+                                <span class="cron-type-badge timer">timer</span>
+                            </div>
+                            <div class="cron-time">${j.time_desc}</div>
+                            <div style="display:flex;"><span class="cron-cmd" title="${j.command}">${j.command}</span></div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+                            <label class="toggle-switch" style="transform: scale(0.85);">
+                                <input type="checkbox" ${j.enabled?'checked':''} onchange="toggleCron('${j.id}', this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>`;
+                });
+            }
+            $('#timer-list').html(tH);
+        });
+    }
+
+    function toggleCron(id, enable) {
+        $.ajax({
+            url: '/api/cron/toggle',
+            type: 'POST',
+            contentType: 'application/json', 
+            data: JSON.stringify({id: id, enable: enable}),
+            success: d => { if(!d.success) alert('操作失败: ' + (d.msg || '')); },
+            error: () => alert('操作失败')
+        });
+    }
+
+    function runCronOnce(cmd) {
+        $.ajax({
+            url: '/api/cron/run_once',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({command: cmd}),
+            success: d => alert(d.msg || '执行成功'),
+            error: () => alert('网络错误，执行失败')
+        });
+    }
+
+    function genOptions(start, end, selected=0) {
+        let opt = '';
+        for (let i = start; i <= end; i++) {
+            opt += `<option value="${i}" ${i === selected ? 'selected' : ''}>${String(i).padStart(2, '0')}</option>`;
+        }
+        return opt;
+    }
+
+    function setFreqSegment(val, el) {
+        $('.freq-segment').removeClass('active');
+        $(el).addClass('active');
+        $('#cron-add-preset').val(val);
+        onCronPresetChange(val);
+    }
+
+    function toggleMonthMulti(checked) {
+        if (!checked) {
+            let activeBtns = $('.monthday-btn.active');
+            if (activeBtns.length > 1) {
+                let firstVal = activeBtns.first().data('val');
+                $('.monthday-btn').removeClass('active');
+                $(`.monthday-btn[data-val="${firstVal}"]`).addClass('active');
+            }
+        }
+    }
+
+    function selectMonthDay(btn) {
+        let isMulti = $('#cron-month-multi').is(':checked');
+        if (isMulti) {
+            $(btn).toggleClass('active');
+        } else {
+            $('.monthday-btn').removeClass('active');
+            $(btn).addClass('active');
+        }
+    }
+
+    function onCronPresetChange(val) {
+        let formHtml = '';
+        if (val === 'every_min') {
+            formHtml = `<div style="font-size:12px; color:var(--text-sec); text-align:center; padding:10px;">任务将在每分钟自动执行一次。</div>`;
+        } else if (val === 'every_hour') {
+            formHtml = `
+                <div class="time-select-group">
+                    <span style="font-size:13px; color:var(--text-sec); font-weight:500;">在每小时的第</span>
+                    <select id="cron-val-min" class="time-select">
+                        ${genOptions(0, 59)}
+                    </select>
+                    <span style="font-size:13px; color:var(--text-sec); font-weight:500;">分钟执行</span>
+                </div>
+            `;
+        } else if (val === 'every_x_hours') {
+            formHtml = `
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div class="time-select-group" style="margin-top:0;">
+                        <span style="font-size:13px; color:var(--text-sec); font-weight:500;">每隔</span>
+                        <select id="cron-val-hour-interval" class="time-select">
+                            ${genOptions(1, 23, 1)}
+                        </select>
+                        <span style="font-size:13px; color:var(--text-sec); font-weight:500;">小时执行</span>
+                    </div>
+                    <div class="time-select-group" style="margin-top:0;">
+                        <span style="font-size:13px; color:var(--text-sec); font-weight:500;">在小时内的第</span>
+                        <select id="cron-val-min" class="time-select">
+                            ${genOptions(0, 59)}
+                        </select>
+                        <span style="font-size:13px; color:var(--text-sec); font-weight:500;">分钟</span>
+                    </div>
+                </div>
+            `;
+        } else if (val === 'every_day') {
+            formHtml = `
+                <div class="time-select-group">
+                    <span style="font-size:13px; color:var(--text-sec); font-weight:500;">每天的时间：</span>
+                    <select id="cron-val-hour" class="time-select">
+                        ${genOptions(0, 23)}
+                    </select>
+                    <span style="font-size:16px; color:var(--text-sec); font-weight:700;">:</span>
+                    <select id="cron-val-min" class="time-select">
+                        ${genOptions(0, 59)}
+                    </select>
+                </div>
+            `;
+        } else if (val === 'every_week') {
+            formHtml = `
+                <div style="display:flex; flex-direction:column; text-align:left;">
+                    <span style="font-size:11px; color:var(--text-sec); font-weight:600;">选择每周的哪几天：</span>
+                    <div class="weekday-grid">
+                        ${['日', '一', '二', '三', '四', '五', '六'].map((day, idx) => `
+                            <button type="button" class="weekday-btn ${idx === 1 ? 'active' : ''}" data-val="${idx}" onclick="$(this).toggleClass('active')">${day}</button>
+                        `).join('')}
+                    </div>
+                    <div class="time-select-group" style="margin-top:4px;">
+                        <span style="font-size:13px; color:var(--text-sec); font-weight:500;">具体时间：</span>
+                        <select id="cron-val-hour" class="time-select">
+                            ${genOptions(0, 23)}
+                        </select>
+                        <span style="font-size:16px; color:var(--text-sec); font-weight:700;">:</span>
+                        <select id="cron-val-min" class="time-select">
+                            ${genOptions(0, 59)}
+                        </select>
+                    </div>
+                </div>
+            `;
+        } else if (val === 'every_month') {
+            formHtml = `
+                <div style="display:flex; flex-direction:column; text-align:left;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:11px; color:var(--text-sec); font-weight:600;">在每月的第几号执行：</span>
+                        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:11px; color:var(--text-sec); font-weight:600;">
+                            <span>多选日期</span>
+                            <label class="toggle-switch" style="transform: scale(0.7); margin: 0; width: 50px; height: 30px;">
+                                <input type="checkbox" id="cron-month-multi" onchange="toggleMonthMulti(this.checked)">
+                                <span class="slider"></span>
+                            </label>
+                        </label>
+                    </div>
+                    <div class="monthday-grid">
+                        ${Array.from({length: 31}, (_, i) => i + 1).map(day => `
+                            <button type="button" class="monthday-btn ${day === 1 ? 'active' : ''}" data-val="${day}" onclick="selectMonthDay(this)">${day}</button>
+                        `).join('')}
+                    </div>
+                    <div class="time-select-group" style="margin-top:4px;">
+                        <span style="font-size:13px; color:var(--text-sec); font-weight:500;">具体时间：</span>
+                        <select id="cron-val-hour" class="time-select">
+                            ${genOptions(0, 23)}
+                        </select>
+                        <span style="font-size:16px; color:var(--text-sec); font-weight:700;">:</span>
+                        <select id="cron-val-min" class="time-select">
+                            ${genOptions(0, 59)}
+                        </select>
+                    </div>
+                </div>
+            `;
+        } else if (val === 'custom') {
+            formHtml = `
+                <div class="modal-input-card">
+                    <label>自定义 Cron 时间表达式</label>
+                    <input type="text" id="cron-add-schedule" value="0 0 * * *" placeholder="例如: 0 2 * * *">
+                </div>
+            `;
+        }
+        $('#cron-dynamic-options').html(formHtml);
+    }
+
+    function showAddCronModal() {
+        openModal('新增 Crontab 定时任务', `
+            <div style="display:flex; flex-direction:column; gap:14px; margin-top:10px; text-align:left;">
+                <div class="modal-input-card">
+                    <label>任务备注名称</label>
+                    <input type="text" id="cron-add-name" placeholder="例如: 每日日志清理">
+                </div>
+                <div>
+                    <label style="font-size:11px; color:var(--text-sec); display:block; margin-bottom:6px; font-weight:600;">执行频率</label>
+                    <div class="freq-segmented">
+                        <button type="button" class="freq-segment active" onclick="setFreqSegment('every_day', this)">每天</button>
+                        <button type="button" class="freq-segment" onclick="setFreqSegment('every_min', this)">每分</button>
+                        <button type="button" class="freq-segment" onclick="setFreqSegment('every_hour', this)">每时</button>
+                        <button type="button" class="freq-segment" onclick="setFreqSegment('every_x_hours', this)">间隔</button>
+                        <button type="button" class="freq-segment" onclick="setFreqSegment('every_week', this)">每周</button>
+                        <button type="button" class="freq-segment" onclick="setFreqSegment('every_month', this)">每月</button>
+                        <button type="button" class="freq-segment" onclick="setFreqSegment('custom', this)">自定义</button>
+                    </div>
+                    <input type="hidden" id="cron-add-preset" value="every_day">
+                </div>
+                <div id="cron-dynamic-options"></div>
+                <div class="modal-input-card">
+                    <label>运行指令</label>
+                    <input type="text" id="cron-add-cmd" placeholder="例如: /usr/bin/python3 /home/ubuntu/script.py">
+                </div>
+            </div>
+        `, true);
+        onCronPresetChange('every_day');
+
+        $('#btn-close-main').hide();
+        $('#confirm-row').show();
+        $('#btn-confirm').text('添加').css('background', 'var(--accent)').off('click').on('click', () => {
+            let name = $('#cron-add-name').val();
+            let type = $('#cron-add-preset').val();
+            let schedule = '* * * * *';
+            if (type === 'every_min') {
+                schedule = '* * * * *';
+            } else if (type === 'every_hour') {
+                let min = $('#cron-val-min').val();
+                schedule = `${min} * * * *`;
+            } else if (type === 'every_x_hours') {
+                let interval = $('#cron-val-hour-interval').val();
+                let min = $('#cron-val-min').val();
+                schedule = `${min} */${interval} * * *`;
+            } else if (type === 'every_day') {
+                let hour = $('#cron-val-hour').val();
+                let min = $('#cron-val-min').val();
+                schedule = `${min} ${hour} * * *`;
+            } else if (type === 'every_week') {
+                let days = [];
+                $('.weekday-btn.active').each(function() {
+                    days.push($(this).data('val'));
+                });
+                if (days.length === 0) {
+                    alert('请至少选择周内的一天！');
+                    return;
+                }
+                let hour = $('#cron-val-hour').val();
+                let min = $('#cron-val-min').val();
+                schedule = `${min} ${hour} * * ${days.join(',')}`;
+            } else if (type === 'every_month') {
+                let doms = [];
+                $('.monthday-btn.active').each(function() {
+                    doms.push($(this).data('val'));
+                });
+                if (doms.length === 0) {
+                    alert('请至少选择一个日期！');
+                    return;
+                }
+                let hour = $('#cron-val-hour').val();
+                let min = $('#cron-val-min').val();
+                schedule = `${min} ${hour} ${doms.join(',')} * *`;
+            } else if (type === 'custom') {
+                schedule = $('#cron-add-schedule').val().trim();
+            }
+
+            let cmd = $('#cron-add-cmd').val();
+            if (!schedule || !cmd) {
+                alert('请填写必填的表达式与指令');
+                return;
+            }
+            $.ajax({
+                url: '/api/cron/add',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({name: name, schedule: schedule, command: cmd}),
+                success: d => {
+                    closeModal();
+                    alert(d.msg || '添加成功');
+                    loadCron();
+                },
+                error: () => {
+                    closeModal();
+                    alert('网络请求失败');
+                }
+            });
+        });
+    }
+
+    function deleteCron(id) {
+        openModal('删除任务', '确定要彻底删除此定时任务吗？', true);
+        $('#btn-close-main').hide();
+        $('#confirm-row').show();
+        $('#btn-confirm').text('删除').css('background', 'var(--danger)').off('click').on('click', () => {
+            $.ajax({
+                url: '/api/cron/delete',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({id: id}),
+                success: d => {
+                    closeModal();
+                    alert(d.msg || '删除成功');
+                    loadCron();
+                },
+                error: () => {
+                    closeModal();
+                    alert('网络请求失败');
+                }
+            });
+        });
+    }
+
+    function openModal(t, c, isForm=false) { 
+        $('#modal-title').html(t); 
+        $('#modal-form-content').html(c);
+        $('#modal').css('display', 'flex');
+        setTimeout(() => { $('#modal').addClass('active'); }, 10);
+        $('#confirm-row').hide(); 
+        $('#btn-close-main').show();
+    }
+    
+    function closeModal() { 
+        $('#modal').removeClass('active');
+        setTimeout(() => { $('#modal').css('display', 'none'); }, 200);
+    }
+
+    $(document).ready(() => {
+        loadCron();
+        setInterval(loadCron, 2000); // 间隔两秒刷新一次列表数据
+    });
+</script>
+</body>
+</html>
