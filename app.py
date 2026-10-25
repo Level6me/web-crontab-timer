@@ -6,6 +6,9 @@ from flask import Flask, request, jsonify, render_template
 
 app = Flask(__name__)
 
+# 串行化 crontab 的读改写操作，防止并发请求相互覆盖
+cron_lock = threading.Lock()
+
 def run_cmd(cmd):
     """运行终端命令并返回输出"""
     try:
@@ -120,25 +123,26 @@ def get_systemd_timers():
 def toggle_cron_job(job_id, enable):
     """开启/关闭 cron 任务"""
     try:
-        raw = run_cmd("sudo crontab -l 2>/dev/null")
-        lines = raw.split('\n')
-        idx = int(job_id.replace('cron_', ''))
-        count = 0
-        for i, line in enumerate(lines):
-            line_stripped = line.strip()
-            if line_stripped and not line_stripped.startswith('#'):
-                parts = line_stripped.split()
-                if len(parts) >= 6 and parts[0].replace('*','').replace(',','').replace('-','').replace('/','').isdigit():
-                    if count == idx:
-                        if enable and line_stripped.startswith('#'):
-                            lines[i] = line_stripped[1:].strip()
-                        elif not enable and not line_stripped.startswith('#'):
-                            lines[i] = '# ' + line_stripped
-                        break
-                    count += 1
-        new_cron = '\n'.join(lines) + '\n'
-        proc = subprocess.Popen(['sudo', 'crontab', '-'], stdin=subprocess.PIPE, text=True)
-        proc.communicate(input=new_cron)
+        with cron_lock:
+            raw = run_cmd("sudo crontab -l 2>/dev/null")
+            lines = raw.split('\n')
+            idx = int(job_id.replace('cron_', ''))
+            count = 0
+            for i, line in enumerate(lines):
+                line_stripped = line.strip()
+                if line_stripped and not line_stripped.startswith('#'):
+                    parts = line_stripped.split()
+                    if len(parts) >= 6 and parts[0].replace('*','').replace(',','').replace('-','').replace('/','').isdigit():
+                        if count == idx:
+                            if enable and line_stripped.startswith('#'):
+                                lines[i] = line_stripped[1:].strip()
+                            elif not enable and not line_stripped.startswith('#'):
+                                lines[i] = '# ' + line_stripped
+                            break
+                        count += 1
+            new_cron = '\n'.join(lines) + '\n'
+            proc = subprocess.Popen(['sudo', 'crontab', '-'], stdin=subprocess.PIPE, text=True)
+            proc.communicate(input=new_cron)
         return True
     except:
         return False
@@ -207,19 +211,23 @@ def cron_add():
     name = d.get('name', '')
     if not schedule or not cmd:
         return jsonify({"success": False, "msg": "时间表达式与执行指令不能为空"})
+    # 拒绝换行符，防止借单条记录注入多条 crontab 条目
+    if '\n' in schedule or '\r' in schedule or '\n' in cmd or '\r' in cmd or '\n' in name or '\r' in name:
+        return jsonify({"success": False, "msg": "内容不能包含换行符"})
     try:
         if len(schedule.split()) < 5:
             return jsonify({"success": False, "msg": "Cron 时间表达式格式无效"})
-        raw = run_cmd("sudo crontab -l 2>/dev/null")
-        lines = raw.split('\n') if raw else []
-        if lines and not lines[-1].strip():
-            lines.pop()
-        if name:
-            lines.append(f"# {name}")
-        lines.append(f"{schedule} {cmd}")
-        new_cron = '\n'.join(lines) + '\n'
-        proc = subprocess.Popen(['sudo', 'crontab', '-'], stdin=subprocess.PIPE, text=True)
-        proc.communicate(input=new_cron)
+        with cron_lock:
+            raw = run_cmd("sudo crontab -l 2>/dev/null")
+            lines = raw.split('\n') if raw else []
+            if lines and not lines[-1].strip():
+                lines.pop()
+            if name:
+                lines.append(f"# {name}")
+            lines.append(f"{schedule} {cmd}")
+            new_cron = '\n'.join(lines) + '\n'
+            proc = subprocess.Popen(['sudo', 'crontab', '-'], stdin=subprocess.PIPE, text=True)
+            proc.communicate(input=new_cron)
         return jsonify({"success": True, "msg": "新定时任务添加成功"})
     except Exception as e:
         return jsonify({"success": False, "msg": str(e)})
@@ -231,29 +239,31 @@ def cron_delete():
     if not job_id.startswith('cron_') or not job_id.replace('cron_', '').isdigit():
         return jsonify({"success": False, "msg": "无效的任务 ID"})
     try:
-        raw = run_cmd("sudo crontab -l 2>/dev/null")
-        lines = raw.split('\n')
-        idx = int(job_id.replace('cron_', ''))
-        count = 0
-        target_line_idx = -1
-        for i, line in enumerate(lines):
-            line_stripped = line.strip()
-            if line_stripped and not line_stripped.startswith('#'):
-                parts = line_stripped.split()
-                if len(parts) >= 6 and parts[0].replace('*','').replace(',','').replace('-','').replace('/','').isdigit():
-                    if count == idx:
-                        target_line_idx = i
-                        break
-                    count += 1
-        if target_line_idx != -1:
-            lines.pop(target_line_idx)
-            if target_line_idx > 0 and lines[target_line_idx-1].strip().startswith('#'):
-                lines.pop(target_line_idx-1)
-            new_cron = '\n'.join(lines) + '\n'
-            proc = subprocess.Popen(['sudo', 'crontab', '-'], stdin=subprocess.PIPE, text=True)
-            proc.communicate(input=new_cron)
-            return jsonify({"success": True, "msg": "任务已成功删除"})
-        return jsonify({"success": False, "msg": "未在 Crontab 中定位到该任务"})
+        with cron_lock:
+            raw = run_cmd("sudo crontab -l 2>/dev/null")
+            lines = raw.split('\n')
+            idx = int(job_id.replace('cron_', ''))
+            count = 0
+            target_line_idx = -1
+            for i, line in enumerate(lines):
+                line_stripped = line.strip()
+                if line_stripped and not line_stripped.startswith('#'):
+                    parts = line_stripped.split()
+                    if len(parts) >= 6 and parts[0].replace('*','').replace(',','').replace('-','').replace('/','').isdigit():
+                        if count == idx:
+                            target_line_idx = i
+                            break
+                        count += 1
+            if target_line_idx != -1:
+                lines.pop(target_line_idx)
+                if target_line_idx > 0 and lines[target_line_idx-1].strip().startswith('#'):
+                    lines.pop(target_line_idx-1)
+                new_cron = '\n'.join(lines) + '\n'
+                proc = subprocess.Popen(['sudo', 'crontab', '-'], stdin=subprocess.PIPE, text=True)
+                proc.communicate(input=new_cron)
+            else:
+                return jsonify({"success": False, "msg": "未在 Crontab 中定位到该任务"})
+        return jsonify({"success": True, "msg": "任务已成功删除"})
     except Exception as e:
         return jsonify({"success": False, "msg": str(e)})
 

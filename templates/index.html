@@ -415,6 +415,8 @@
 </div>
 
 <script>
+    // HTML 转义工具，防止任务名/命令内容注入页面结构
+    const escHtml = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     // 定时任务加载
     def = loadCron;
     function loadCron() {
@@ -430,17 +432,17 @@
                         <div class="cron-icon">${icon}</div>
                         <div class="cron-info">
                             <div class="cron-meta">
-                                <span class="cron-name">${j.name || '未命名任务'}</span>
+                                <span class="cron-name">${escHtml(j.name || '未命名任务')}</span>
                                 <span class="cron-type-badge">cron</span>
                             </div>
-                            <div class="cron-time">${j.time_desc}</div>
-                            <div style="display:flex;"><span class="cron-cmd" title="${j.command}">${j.command}</span></div>
+                            <div class="cron-time">${escHtml(j.time_desc)}</div>
+                            <div style="display:flex;"><span class="cron-cmd" title="${escHtml(j.command)}">${escHtml(j.command)}</span></div>
                         </div>
                         <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
-                            <button onclick="runCronOnce('${j.command.replace(/'/g, "\\'")}')" title="立即执行一次" class="btn-action" style="color:var(--success)">▶</button>
-                            <button onclick="deleteCron('${j.id}')" title="删除任务" class="btn-action" style="color:var(--danger)">🗑️</button>
+                            <button onclick="runCronOnce(this.dataset.cmd)" data-cmd="${escHtml(j.command)}" title="立即执行一次" class="btn-action" style="color:var(--success)">▶</button>
+                            <button onclick="deleteCron('${escHtml(j.id)}')" title="删除任务" class="btn-action" style="color:var(--danger)">🗑️</button>
                             <label class="toggle-switch" style="transform: scale(0.85);">
-                                <input type="checkbox" ${j.enabled?'checked':''} onchange="toggleCron('${j.id}', this.checked)">
+                                <input type="checkbox" ${j.enabled?'checked':''} onchange="toggleCron('${escHtml(j.id)}', this.checked)">
                                 <span class="slider"></span>
                             </label>
                         </div>
@@ -460,15 +462,15 @@
                         <div class="cron-icon">${icon}</div>
                         <div class="cron-info">
                             <div class="cron-meta">
-                                <span class="cron-name">${j.name}</span>
+                                <span class="cron-name">${escHtml(j.name)}</span>
                                 <span class="cron-type-badge timer">timer</span>
                             </div>
-                            <div class="cron-time">${j.time_desc}</div>
-                            <div style="display:flex;"><span class="cron-cmd" title="${j.command}">${j.command}</span></div>
+                            <div class="cron-time">${escHtml(j.time_desc)}</div>
+                            <div style="display:flex;"><span class="cron-cmd" title="${escHtml(j.command)}">${escHtml(j.command)}</span></div>
                         </div>
                         <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
                             <label class="toggle-switch" style="transform: scale(0.85);">
-                                <input type="checkbox" ${j.enabled?'checked':''} onchange="toggleCron('${j.id}', this.checked)">
+                                <input type="checkbox" ${j.enabled?'checked':''} onchange="toggleCron('${escHtml(j.id)}', this.checked)">
                                 <span class="slider"></span>
                             </label>
                         </div>
